@@ -5,6 +5,9 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { writeFile, unlink } from "fs/promises";
 import { join } from "path";
 import { tmpdir } from "os";
+import { YoutubeTranscript } from 'youtube-transcript';
+
+// ... existing imports
 
 // Initialize Gemini
 // Note: In production, ensure these keys are set. For now we use the env var.
@@ -15,6 +18,74 @@ if (!apiKey) {
 
 const fileManager = new GoogleAIFileManager(apiKey || "");
 const genAI = new GoogleGenerativeAI(apiKey || "");
+
+export async function processYoutubeUrl(url: string) {
+  if (!apiKey) {
+    return { success: false, error: "Server configuration error: Missing API Key" };
+  }
+
+  try {
+    console.log(`Fetching transcript for: ${url}`);
+    
+    // Basic validation
+    if (!url.includes('youtube.com') && !url.includes('youtu.be')) {
+       return { success: false, error: "Invalid YouTube URL" };
+    }
+
+    const transcriptItems = await YoutubeTranscript.fetchTranscript(url);
+    
+    if (!transcriptItems || transcriptItems.length === 0) {
+      return { success: false, error: "No transcript found for this video." };
+    }
+
+    // Join text (limit length if necessary, but Gemini Flash handles ~1M tokens)
+    const transcriptText = transcriptItems.map(item => item.text).join(' ');
+    
+    console.log("Transcript fetched, length:", transcriptText.length);
+
+    const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
+    
+    const result = await model.generateContent([
+      `다음은 유튜브 영상의 자막 스크립트입니다. 이 내용을 심층적으로 분석하여 한국어로 요약해 주세요. 
+      가독성을 극대화하기 위해 다음 규칙을 엄격히 준수해 주세요:
+
+      1. **구조화된 불릿 포인트**: 긴 줄글 대신 짧고 명확한 불릿 포인트(•)를 사용하세요.
+      2. **계층 구조**: 필요하다면 하위 불릿 포인트를 사용하여 내용을 구조화하세요.
+      3. **이모지 활용**: 각 섹션과 주요 포인트 앞에 적절한 이모지를 배치하여 시각적 구분을 도우세요.
+      4. **마크다운 포맷**: **볼드체**로 핵심 단어를 강조하세요.
+
+      [작성 포맷]
+      # 📺 유튜브 영상 요약
+
+      ## 💡 핵심 요약
+      - (핵심 내용을 3문장 이내로 간결하게 요약)
+
+      ## 🔑 주요 내용
+      - **(이모지) 주제 1**
+        - 상세 설명 (간결하게)
+        - 상세 설명 (간결하게)
+      - **(이모지) 주제 2**
+        - 상세 설명 (간결하게)
+        - 상세 설명 (간결하게)
+      
+      ## 📝 세부 분석
+      - (자막 내용을 바탕으로 계층형 불릿 포인트로 상세히 정리)
+
+      ## 🎯 결론 및 시사점
+      - (최종 결론 요약)`,
+      transcriptText
+    ]);
+
+    const summary = result.response.text();
+    
+    // For YouTube, we don't have a file URI from Gemini, so we pass null or specific type
+    return { success: true, summary, fileUri: null, mimeType: 'text/plain', fileName: 'YouTube Video' };
+
+  } catch (error: any) {
+    console.error("Error processing YouTube URL:", error);
+    return { success: false, error: error.message || "Failed to process YouTube URL" };
+  }
+}
 
 export async function processFile(formData: FormData) {
   if (!apiKey) {

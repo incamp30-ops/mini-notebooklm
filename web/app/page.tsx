@@ -5,12 +5,12 @@ import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useDropzone } from 'react-dropzone'
-import { processFile } from './actions'
-import { FileText, Loader2, Upload, History, Trash2, LogOut, Sparkles, ChevronRight, Menu, X } from 'lucide-react'
+import { processFile, processYoutubeUrl } from './actions'
+import { FileText, Loader2, Upload, History, Trash2, LogOut, Sparkles, ChevronRight, Menu, X, Link, Youtube } from 'lucide-react'
 import clsx from 'clsx'
 import ReactMarkdown from 'react-markdown'
-// I'll just render text with whitespace-pre-wrap for now or install react-markdown if needed later.
-// For now, simple text display.
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Button } from "@/components/ui/button"
 
 export default function Dashboard() {
   const router = useRouter()
@@ -226,26 +226,113 @@ export default function Dashboard() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
               >
-                <div 
-                  {...getRootProps()} 
-                  className={clsx(
-                    "border-2 border-dashed rounded-2xl p-12 flex flex-col items-center justify-center text-center cursor-pointer transition-all duration-300 group bg-secondary/5",
-                    isDragActive ? "border-primary bg-primary/5" : "border-white/10 hover:border-primary/50 hover:bg-white/5"
-                  )}
-                >
-                  <input {...getInputProps()} />
-                  <div className="w-16 h-16 rounded-full bg-secondary/30 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
-                    <Upload className="w-8 h-8 text-muted-foreground group-hover:text-primary transition-colors" />
+              {/* Main Upload Area */}
+            <div className="flex-1 flex flex-col items-center justify-center p-8 bg-[#1A1A1A]/80 backdrop-blur-sm rounded-xl border border-white/5 relative overflow-hidden group">
+              {/* Animated Glow */}
+              <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/10 via-purple-500/5 to-pink-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
+              
+              <Tabs defaultValue="file" className="w-full max-w-xl mx-auto z-10">
+                <TabsList className="grid w-full grid-cols-2 mb-8 bg-black/40 p-1 border border-white/10 rounded-lg">
+                  <TabsTrigger value="file" className="data-[state=active]:bg-white/10 data-[state=active]:text-white">
+                    <p className="flex items-center gap-2"><Upload className="w-4 h-4" /> 파일 업로드</p>
+                  </TabsTrigger>
+                  <TabsTrigger value="link" className="data-[state=active]:bg-white/10 data-[state=active]:text-white">
+                    <p className="flex items-center gap-2"><Link className="w-4 h-4" /> 유튜브 링크</p>
+                  </TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="file" className="mt-0">
+                  <div
+                    {...getRootProps()}
+                    className={clsx(
+                      'w-full aspect-video rounded-xl border-2 border-dashed transition-all duration-300 flex flex-col items-center justify-center gap-6 cursor-pointer relative overflow-hidden',
+                      isDragActive
+                        ? 'border-indigo-500 bg-indigo-500/10 scale-[1.02]'
+                        : 'border-white/10 hover:border-white/20 hover:bg-white/5'
+                    )}
+                  >
+                    <input {...getInputProps()} />
+                    
+                    <div className={clsx(
+                      "w-20 h-20 rounded-2xl flex items-center justify-center transition-all duration-500",
+                      isDragActive ? "bg-indigo-500 shadow-[0_0_30px_rgba(99,102,241,0.5)]" : "bg-gradient-to-br from-indigo-500 to-purple-500 shadow-xl"
+                    )}>
+                      <Upload className="w-10 h-10 text-white" />
+                    </div>
+
+                    <div className="text-center space-y-2 relative z-10">
+                      <p className="text-xl font-medium text-white/90">
+                        {isDragActive ? '파일을 놓아주세요' : '파일을 여기에 드래그하세요'}
+                      </p>
+                      <p className="text-sm text-white/50">
+                        PDF, 이미지, 오디오, 비디오 지원 (최대 50MB)
+                      </p>
+                    </div>
                   </div>
-                  <h3 className="text-xl font-bold mb-2">파일을 여기에 놓으세요</h3>
-                  <p className="text-muted-foreground mb-6 max-w-sm">
-                    PDF, 이미지, 동영상 지원 <br/>
-                    AI가 내용을 분석하고 요약해드립니다.
-                  </p>
-                  <button className="px-6 py-2.5 bg-primary text-white rounded-lg hover:bg-primary/90 transition-all shadow-lg shadow-primary/20 font-medium">
-                    파일 선택
-                  </button>
-                </div>
+                </TabsContent>
+
+                <TabsContent value="link" className="mt-0">
+                  <div className="w-full aspect-video rounded-xl border border-white/10 bg-black/20 flex flex-col items-center justify-center p-8 gap-6">
+                    <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-red-500 to-pink-600 flex items-center justify-center shadow-xl mb-2">
+                       <Youtube className="w-10 h-10 text-white" />
+                    </div>
+                    <div className="w-full space-y-4">
+                      <div className="text-center space-y-1">
+                        <h3 className="text-lg font-medium text-white">유튜브 영상 요약</h3>
+                        <p className="text-sm text-white/50">영상 주소를 입력하면 자막을 분석하여 요약해 드립니다.</p>
+                      </div>
+                      <form onSubmit={async (e) => {
+                        e.preventDefault();
+                        const updateUrl = new FormData(e.currentTarget).get('url') as string;
+                        if (!updateUrl) return;
+
+                        setIsAnalyzing(true);
+                        setSummary("");
+                        
+                        try {
+                           // Use imported action
+                           const { processYoutubeUrl } = await import('./actions'); 
+                           const result = await processYoutubeUrl(updateUrl);
+                           
+                           if (!result.success) {
+                             alert(result.error);
+                             return;
+                           }
+                           
+                           setSummary(result.summary);
+                           await saveSummary(user.id, result.summary, result.fileName || 'YouTube Video');
+                           // Refresh history
+                           const { data } = await supabase.from('summaries').select('*').eq('user_id', user.id).order('created_at', { ascending: false });
+                           if (data) setHistory(data);
+
+                        } catch (err: any) {
+                          alert('Error processing URL: ' + err.message);
+                        } finally {
+                          setIsAnalyzing(false);
+                        }
+                      }} className="flex gap-2">
+                         <input 
+                           name="url"
+                           type="url" 
+                           placeholder="https://www.youtube.com/watch?v=..."
+                           className="flex-1 bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-red-500/50"
+                           required
+                         />
+                         <Button type="submit" disabled={isAnalyzing} className="bg-white text-black hover:bg-white/90">
+                            {isAnalyzing ? <Loader2 className="w-4 h-4 animate-spin" /> : "요약하기"}
+                         </Button>
+                      </form>
+                    </div>
+                  </div>
+                </TabsContent>
+              </Tabs>
+
+              {/* Security Badge */}
+              <div className="mt-8 flex items-center gap-2 text-xs text-white/30">
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500/50" />
+                 엔터프라이즈급 보안 암호화
+              </div>
+            </div>
               </motion.div>
             )}
 
