@@ -286,7 +286,7 @@ export default function Dashboard() {
                         const updateUrl = new FormData(e.currentTarget).get('url') as string;
                         if (!updateUrl) return;
 
-                        setIsAnalyzing(true);
+                        setProcessing(true);
                         setSummary("");
                         
                         try {
@@ -300,15 +300,26 @@ export default function Dashboard() {
                            }
                            
                            setSummary(result.summary);
-                           await saveSummary(user.id, result.summary, result.fileName || 'YouTube Video');
-                           // Refresh history
-                           const { data } = await supabase.from('summaries').select('*').eq('user_id', user.id).order('created_at', { ascending: false });
-                           if (data) setHistory(data);
+                           
+                           // Save to Supabase
+                           if (user) {
+                             const { data } = await supabase.from('summaries').insert({
+                               user_id: user.id,
+                               file_name: result.fileName || 'YouTube Video',
+                               file_type: 'video/youtube', // Custom type for icon logic if needed
+                               summary: result.summary
+                             }).select().single();
+                             
+                             if (data) {
+                               setHistory([data, ...history]);
+                               setSelectedHistory(data);
+                             }
+                           }
 
                         } catch (err: any) {
                           alert('Error processing URL: ' + err.message);
                         } finally {
-                          setIsAnalyzing(false);
+                          setProcessing(false);
                         }
                       }} className="flex gap-2">
                          <input 
@@ -318,8 +329,8 @@ export default function Dashboard() {
                            className="flex-1 bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-red-500/50"
                            required
                          />
-                         <Button type="submit" disabled={isAnalyzing} className="bg-white text-black hover:bg-white/90">
-                            {isAnalyzing ? <Loader2 className="w-4 h-4 animate-spin" /> : "요약하기"}
+                         <Button type="submit" disabled={processing} className="bg-white text-black hover:bg-white/90">
+                            {processing ? <Loader2 className="w-4 h-4 animate-spin" /> : "요약하기"}
                          </Button>
                       </form>
                     </div>
