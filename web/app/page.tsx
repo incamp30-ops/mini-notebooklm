@@ -299,7 +299,7 @@ export default function Dashboard() {
                              return;
                            }
                            
-                           setSummary(result.summary);
+                           setSummary(result.summary || "");
                            
                            // Save to Supabase
                            if (user) {
